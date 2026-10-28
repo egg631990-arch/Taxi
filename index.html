@@ -57,7 +57,9 @@
                     </div>
                     <div id="orderStatus"></div>
                     <button id="orderBtn">Заказать такси</button>
+                    <button id="cancelBtn" class="dangerBtn">Отменить заказ</button>
                 </div>
+                <div id="toast"></div>
             </div>
         </div>
 
@@ -96,14 +98,24 @@
         <div id="sheetBox">
             <h2>Пополнить баланс</h2>
             <input type="number" id="topupInput" placeholder="Сумма в ₸" inputmode="numeric">
-            <div id="chips">
-                <span data-v="1000">1 000</span>
-                <span data-v="3000">3 000</span>
-                <span data-v="5000">5 000</span>
-                <span data-v="10000">10 000</span>
-            </div>
+           <div id="chips">
+    <span data-v="10000">10 000</span>
+    <span data-v="30000">30 000</span>
+    <span data-v="50000">50 000</span>
+    <span data-v="100000">100 000</span>
+</div>
             <button id="topupOk" class="yellowBtn">Пополнить</button>
             <button id="topupCancel" class="grayBtn">Отмена</button>
+        </div>
+    </div>
+
+    <div id="cancelSheet">
+        <div id="cancelBox">
+            <h2>Отменить заказ?</h2>
+            <p>Вы точно хотите отменить заказ?</p>
+            <p class="warn">Деньги за поездку уже переданы водителю, и мы не сможем вернуть их вам.</p>
+            <button id="cancelYes" class="dangerBtn">Да, отменить заказ</button>
+            <button id="cancelNo" class="grayBtn">Нет, оставить заказ</button>
         </div>
     </div>
 
