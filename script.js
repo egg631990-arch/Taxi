@@ -8,8 +8,20 @@ L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 const stopsLayer = L.layerGroup().addTo(map);
 const foundLayer = L.layerGroup().addTo(map);
+const routeLayer = L.layerGroup().addTo(map);
 const addressBox = document.getElementById('address');
 const btnCenter = document.getElementById('btnCenter');
+const mapWrap = document.getElementById('mapWrap');
+const app = document.getElementById('app');
+
+const orderTitle = document.getElementById('orderTitle');
+const orderSub = document.getElementById('orderSub');
+const orderTime = document.getElementById('orderTime');
+const orderDist = document.getElementById('orderDist');
+const orderPrice = document.getElementById('orderPrice');
+const orderStatus = document.getElementById('orderStatus');
+const orderBtn = document.getElementById('orderBtn');
+const orderClose = document.getElementById('orderClose');
 
 let me = null;
 let meMarker = null;
@@ -17,6 +29,11 @@ let stopsVisible = true;
 let follow = false;
 let firstFix = true;
 let lastGeo = null;
+let order = null;
+let busy = false;
+let reqId = 0;
+let balance = Number(localStorage.getItem('balance')) || 0;
+let history = JSON.parse(localStorage.getItem('history') || '[]');
 
 const categories = [
     { re: /столов/, filters: [['amenity', 'canteen'], ['amenity', 'cafe'], ['amenity', 'fast_food']] },
@@ -24,10 +41,10 @@ const categories = [
     { re: /ресторан/, filters: [['amenity', 'restaurant']] },
     { re: /фастфуд|фаст фуд|быстр/, filters: [['amenity', 'fast_food']] },
     { re: /аптек/, filters: [['amenity', 'pharmacy']] },
-    { re: /магазин|продукт/, filters: [['shop', 'supermarket'], ['shop', 'convenience']] },
-    { re: /супермаркет/, filters: [['shop', 'supermarket']] },
+    { re: /^(магазин|продукт)/, filters: [['shop', 'supermarket'], ['shop', 'convenience']] },
+    { re: /^супермаркет/, filters: [['shop', 'supermarket']] },
     { re: /банкомат/, filters: [['amenity', 'atm']] },
-    { re: /банк/, filters: [['amenity', 'bank']] },
+    { re: /^банк/, filters: [['amenity', 'bank']] },
     { re: /заправк|азс|бензин/, filters: [['amenity', 'fuel']] },
     { re: /больниц|поликлиник/, filters: [['amenity', 'hospital'], ['amenity', 'clinic']] },
     { re: /парковк/, filters: [['amenity', 'parking']] },
@@ -37,14 +54,14 @@ const categories = [
     { re: /шиномонтаж|автосервис/, filters: [['shop', 'car_repair']] }
 ];
 
+function fmt(n) {
+    return n.toLocaleString('ru-RU') + ' ₸';
+}
+
 function center() {
     if (me) return me;
     const c = map.getCenter();
     return [c.lat, c.lng];
-}
-
-function dist(m) {
-    return m < 1000 ? Math.round(m) + ' м' : (m / 1000).toFixed(1) + ' км';
 }
 
 function makeAddress(a) {
@@ -158,39 +175,220 @@ document.getElementById('btnStops').addEventListener('click', function () {
     }
 });
 
-function addFound(lat, lon, title, sub, distance) {
+async function getRoute(from, to) {
+    const url = 'https://routing.openstreetmap.de/routed-car/route/v1/driving/'
+        + from[1] + ',' + from[0] + ';' + to[1] + ',' + to[0]
+        + '?overview=full&geometries=geojson';
+    const res = await fetch(url);
+    const data = await res.json();
+    return data.routes && data.routes[0] ? data.routes[0] : null;
+}
+
+function resetBtn() {
+    orderBtn.style.display = 'block';
+    orderBtn.textContent = 'Заказать такси';
+    orderBtn.dataset.mode = 'order';
+    orderStatus.textContent = '';
+    orderStatus.className = '';
+}
+
+async function showOrder(lat, lon, title, addr) {
+    if (busy) return;
+    const id = ++reqId;
+    const from = center();
+    const to = [lat, lon];
+    order = null;
+    routeLayer.clearLayers();
+    orderTitle.textContent = title;
+    orderSub.textContent = addr || '';
+    orderTime.textContent = '...';
+    orderDist.textContent = '';
+    orderPrice.textContent = '';
+    resetBtn();
+    mapWrap.classList.add('ordering');
+
+    let r = null;
+    try {
+        r = await getRoute(from, to);
+    } catch (e) {}
+    if (id !== reqId) return;
+
+    if (!r) {
+        const d = map.distance(from, to) * 1.3;
+        r = { distance: d, duration: d / (30 / 3.6), geometry: null };
+    }
+
+    const km = r.distance / 1000;
+    const min = Math.max(1, Math.round(r.duration / 60));
+    const price = Math.max(800, Math.round((600 + 150 * km) / 10) * 10);
+    order = { title: title, price: price };
+
+    orderTime.textContent = 'В пути ' + min + ' мин';
+    orderDist.textContent = km.toFixed(1) + ' км';
+    orderPrice.textContent = fmt(price);
+
+    if (r.geometry) {
+        const line = L.geoJSON(r.geometry, {
+            style: { color: '#ffc702', weight: 6, opacity: 0.9 }
+        }).addTo(routeLayer);
+        map.fitBounds(line.getBounds(), { padding: [50, 50] });
+    }
+}
+
+orderClose.addEventListener('click', () => {
+    if (busy) return;
+    reqId++;
+    order = null;
+    mapWrap.classList.remove('ordering');
+    routeLayer.clearLayers();
+});
+
+orderBtn.addEventListener('click', () => {
+    if (!order) return;
+    if (orderBtn.dataset.mode === 'wallet') {
+        openTab('wallet');
+        return;
+    }
+    if (balance < order.price) {
+        orderStatus.textContent = 'Недостаточно средств. Баланс: ' + fmt(balance);
+        orderBtn.textContent = 'Пополнить кошелёк';
+        orderBtn.dataset.mode = 'wallet';
+        return;
+    }
+    balance -= order.price;
+    history.unshift({ type: 'out', title: 'Поездка: ' + order.title, amount: order.price, ts: Date.now() });
+    saveWallet();
+    renderWallet();
+    busy = true;
+    orderClose.style.visibility = 'hidden';
+    orderBtn.style.display = 'none';
+    orderStatus.className = '';
+    orderStatus.textContent = 'Ожидаем, пока таксист примет заказ...';
+    setTimeout(() => {
+        orderStatus.textContent = 'Такси в пути';
+        orderStatus.classList.add('go');
+        orderClose.style.visibility = 'visible';
+        busy = false;
+    }, 5000);
+});
+
+function saveWallet() {
+    localStorage.setItem('balance', balance);
+    localStorage.setItem('history', JSON.stringify(history));
+}
+
+function renderWallet() {
+    document.getElementById('balance').textContent = fmt(balance);
+    const box = document.getElementById('history');
+    if (!history.length) {
+        box.innerHTML = '<div class="empty">Операций пока нет</div>';
+        return;
+    }
+    box.innerHTML = history.map(h => {
+        const d = new Date(h.ts).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        const sign = h.type === 'in' ? '+ ' : '− ';
+        return '<div class="hItem"><div><b>' + h.title + '</b><small>' + d + '</small></div><span class="' + h.type + '">' + sign + fmt(h.amount) + '</span></div>';
+    }).join('');
+}
+
+function openTab(t) {
+    app.classList.toggle('wallet', t === 'wallet');
+    document.querySelectorAll('#icon .item').forEach(i => {
+        i.classList.toggle('active', i.dataset.tab === t);
+    });
+    if (t === 'map') {
+        setTimeout(() => map.invalidateSize(), 0);
+        if (order && orderBtn.dataset.mode === 'wallet') resetBtn();
+    }
+}
+
+document.querySelectorAll('#icon .item').forEach(i => {
+    i.addEventListener('click', () => {
+        const t = i.dataset.tab;
+        if (t === 'map' || t === 'wallet') openTab(t);
+    });
+});
+
+const sheet = document.getElementById('sheet');
+const topupInput = document.getElementById('topupInput');
+
+document.getElementById('topupBtn').addEventListener('click', () => {
+    topupInput.value = '';
+    sheet.classList.add('show');
+});
+
+document.getElementById('topupCancel').addEventListener('click', () => {
+    sheet.classList.remove('show');
+});
+
+document.querySelectorAll('#chips span').forEach(c => {
+    c.addEventListener('click', () => {
+        topupInput.value = c.dataset.v;
+    });
+});
+
+document.getElementById('topupOk').addEventListener('click', () => {
+    const v = Math.floor(Number(topupInput.value));
+    if (!v || v <= 0) return;
+    balance += v;
+    history.unshift({ type: 'in', title: 'Пополнение', amount: v, ts: Date.now() });
+    saveWallet();
+    renderWallet();
+    sheet.classList.remove('show');
+});
+
+function addFound(lat, lon, title, addr) {
     const marker = L.marker([lat, lon], {
         icon: L.divIcon({ className: '', html: '<div class="found"></div>', iconSize: [0, 0] })
     }).addTo(foundLayer);
-    marker.bindPopup('<b>' + title + '</b><br>' + (sub ? sub + '<br>' : '') + dist(distance));
+    marker.on('click', () => showOrder(lat, lon, title, addr));
     return marker;
 }
 
+function mapElements(list, c) {
+    return list.map(el => {
+        const lat = el.lat || el.center.lat;
+        const lon = el.lon || el.center.lon;
+        const t = el.tags || {};
+        const addr = [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(', ');
+        return {
+            lat: lat,
+            lon: lon,
+            name: t.name || t.brand || 'Без названия',
+            addr: addr,
+            d: map.distance(c, [lat, lon])
+        };
+    }).sort((a, b) => a.d - b.d).slice(0, 15);
+}
+
+async function overpass(body) {
+    const query = '[out:json][timeout:25];(' + body + ');out center 100;';
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: 'data=' + encodeURIComponent(query)
+    });
+    const data = await res.json();
+    return data.elements;
+}
+
 async function searchCategory(filters, c) {
-    const radii = [100, 500, 1000, 3000];
+    const radii = [100, 500, 1000, 3000, 10000];
     for (const r of radii) {
         const body = filters.map(f => 'nwr["' + f[0] + '"="' + f[1] + '"](around:' + r + ',' + c[0] + ',' + c[1] + ');').join('');
-        const query = '[out:json][timeout:25];(' + body + ');out center 40;';
-        const res = await fetch('https://overpass-api.de/api/interpreter', {
-            method: 'POST',
-            body: 'data=' + encodeURIComponent(query)
-        });
-        const data = await res.json();
-        if (data.elements.length) {
-            return data.elements.map(el => {
-                const lat = el.lat || el.center.lat;
-                const lon = el.lon || el.center.lon;
-                const t = el.tags || {};
-                const addr = [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(', ');
-                return {
-                    lat: lat,
-                    lon: lon,
-                    name: t.name || 'Без названия',
-                    addr: addr,
-                    d: map.distance(c, [lat, lon])
-                };
-            }).sort((a, b) => a.d - b.d).slice(0, 15);
-        }
+        const list = await overpass(body);
+        if (list.length) return mapElements(list, c);
+    }
+    return [];
+}
+
+async function searchName(text, c) {
+    const safe = text.replace(/[\\"^$.*+?()[\]{}|]/g, '\\$&');
+    const radii = [100, 500, 1000, 3000, 10000];
+    for (const r of radii) {
+        const a = '(around:' + r + ',' + c[0] + ',' + c[1] + ')';
+        const body = 'nwr["name"~"' + safe + '",i]' + a + ';nwr["brand"~"' + safe + '",i]' + a + ';nwr["name:ru"~"' + safe + '",i]' + a + ';';
+        const list = await overpass(body);
+        if (list.length) return mapElements(list, c);
     }
     return [];
 }
@@ -218,20 +416,18 @@ document.getElementById('searchForm').addEventListener('submit', async e => {
     foundLayer.clearLayers();
     try {
         const cat = categories.find(x => x.re.test(text));
-        const results = cat ? await searchCategory(cat.filters, c) : await searchText(text, c);
+        let results = cat ? await searchCategory(cat.filters, c) : await searchName(text, c);
+        if (!results.length && !cat) results = await searchText(text, c);
         if (!results.length) {
             alert('Ничего не найдено рядом');
             return;
         }
         const bounds = L.latLngBounds([c]);
-        let first = null;
         results.forEach(r => {
-            const m = addFound(r.lat, r.lon, r.name, r.addr, r.d);
+            addFound(r.lat, r.lon, r.name, r.addr);
             bounds.extend([r.lat, r.lon]);
-            if (!first) first = m;
         });
         map.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 });
-        first.openPopup();
         document.getElementById('searchInput').blur();
     } catch (err) {
         alert('Ошибка поиска');
@@ -255,6 +451,7 @@ window.addEventListener('online', updateStatus);
 window.addEventListener('offline', updateStatus);
 updateStatus();
 
+renderWallet();
 loadStops();
 
 window.addEventListener('load', () => {
