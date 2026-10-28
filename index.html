@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Document</title>
+</head>
+<body>
+    <div id="loader">
+        <img src="img/logo.jpg" alt="logo" id="logo">
+    </div>
+
+    <div id="app">
+        <div id="header">
+            <img src="img/logo.jpg" alt="logo" id="headLogo">
+            <div id="Online">
+                <span id="statusText">Не в сети</span>
+                <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+        </div>
+
+        <form id="searchForm">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" id="searchInput" placeholder="Поиск: столовая, аптека, кафе">
+        </form>
+
+        <div id="mapWrap">
+            <div id="Map"></div>
+            <div id="address">Определяю адрес...</div>
+            <div id="side">
+                <div class="sideBtn green" id="btnLocate">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/><line x1="1" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="23" y2="12"/></svg>
+                </div>
+                <div class="sideBtn" id="btnCenter">
+                    <svg viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+                </div>
+                <div class="sideBtn" id="btnStops">
+                    <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                </div>
+            </div>
+        </div>
+
+        <div id="icon">
+            <div class="item active">
+                <svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+                <span>Карта</span>
+            </div>
+            <div class="item">
+                <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+                <span>Заказ</span>
+            </div>
+            <div class="item">
+                <svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                <span>Кошелек</span>
+            </div>
+            <div class="item">
+                <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <span>Профиль</span>
+            </div>
+        </div>
+    </div>
+
+    <noscript>Включите js</noscript>
+    <script src="script.js"></script>
+</body>
+</html>

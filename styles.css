@@ -1,0 +1,280 @@
+* {
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+}
+
+body {
+    background-color: #040507;
+    font-family: sans-serif;
+}
+
+#logo {
+    width: 30vw;
+}
+
+#loader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #040507;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5000;
+    transition: opacity 0.5s;
+}
+
+#loader.hide {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+}
+
+#header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3vw 4vw;
+}
+
+#headLogo {
+    height: 10vw;
+}
+
+#Online {
+    display: flex;
+    align-items: center;
+    gap: 2vw;
+    padding: 2vw 3vw;
+    border-radius: 3em;
+    background-color: #1e1f24;
+    color: #fff;
+    font-size: 3.6vw;
+}
+
+#Online::before {
+    content: "";
+    width: 3vw;
+    height: 3vw;
+    border-radius: 50%;
+    background-color: red;
+}
+
+#Online.online::before {
+    background-color: #11a04e;
+}
+
+#Online svg {
+    width: 4vw;
+    height: 4vw;
+    fill: none;
+    stroke: #fff;
+    stroke-width: 2;
+}
+
+#searchForm {
+    display: flex;
+    align-items: center;
+    gap: 2vw;
+    margin: 0 3vw 3vw;
+    padding: 0 4vw;
+    height: 12vw;
+    border-radius: 6vw;
+    background-color: #1e1f24;
+}
+
+#searchForm svg {
+    width: 5vw;
+    height: 5vw;
+    fill: none;
+    stroke: #888;
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+
+#searchInput {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 4vw;
+}
+
+#mapWrap {
+    position: relative;
+    flex: 1;
+    margin: 0 3vw;
+    border-radius: 5vw;
+    overflow: hidden;
+    border: 1px solid #1e1f24;
+}
+
+#Map {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    z-index: 0;
+    background-color: #0c0d10;
+}
+
+.leaflet-tile-pane {
+    filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9);
+}
+
+#address {
+    position: absolute;
+    top: 3vw;
+    left: 3vw;
+    right: 3vw;
+    padding: 2.5vw 4vw;
+    border-radius: 4vw;
+    background-color: rgba(18, 19, 26, 0.92);
+    color: #fff;
+    font-size: 3.6vw;
+    z-index: 1000;
+}
+
+#side {
+    position: absolute;
+    right: 3vw;
+    bottom: 5vw;
+    display: flex;
+    flex-direction: column;
+    gap: 3vw;
+    z-index: 1000;
+}
+
+.sideBtn {
+    width: 12vw;
+    height: 12vw;
+    border-radius: 50%;
+    background-color: #12131a;
+    border: 1px solid #2a2b31;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sideBtn svg {
+    width: 6vw;
+    height: 6vw;
+    fill: none;
+    stroke: #fff;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.sideBtn.green svg {
+    stroke: #11a04e;
+}
+
+.sideBtn.follow {
+    background-color: #ffc702;
+}
+
+.sideBtn.follow svg {
+    stroke: #040507;
+    fill: #040507;
+}
+
+.sideBtn.off svg {
+    stroke: #666;
+}
+
+.stop {
+    position: relative;
+    width: 0;
+    height: 0;
+}
+
+.stop .pin {
+    position: absolute;
+    left: -2.5vw;
+    top: -2.5vw;
+    width: 5vw;
+    height: 5vw;
+    border-radius: 50%;
+    border: 1vw solid #ffc702;
+    background-color: #040507;
+}
+
+.stop .tag {
+    position: absolute;
+    left: 3.5vw;
+    top: -3vw;
+    padding: 0.8vw 2vw;
+    border-radius: 2vw;
+    background-color: rgba(4, 5, 7, 0.85);
+    color: #fff;
+    font-size: 3vw;
+    white-space: nowrap;
+}
+
+.me {
+    width: 4vw;
+    height: 4vw;
+    margin-left: -2vw;
+    margin-top: -2vw;
+    border-radius: 50%;
+    background-color: #2f80ff;
+    border: 0.8vw solid #fff;
+    box-shadow: 0 0 0 3vw rgba(47, 128, 255, 0.25);
+}
+
+.found {
+    width: 5vw;
+    height: 5vw;
+    margin-left: -2.5vw;
+    margin-top: -2.5vw;
+    border-radius: 50%;
+    background-color: #ff8a00;
+    border: 1vw solid #fff;
+}
+
+.leaflet-control-attribution {
+    font-size: 2vw;
+}
+
+#icon {
+    display: flex;
+    justify-content: space-around;
+    padding: 3vw 0;
+    padding-bottom: calc(3vw + env(safe-area-inset-bottom));
+}
+
+#icon .item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1vw;
+    color: #fff;
+    font-size: 3vw;
+}
+
+#icon svg {
+    width: 7vw;
+    height: 7vw;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+#icon .item.active {
+    color: #ffc702;
+}
