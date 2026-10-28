@@ -34,7 +34,7 @@ body {
 #loader.hide {
     opacity: 0;
     pointer-events: none;
-}
+} 
 
 #app {
     display: flex;
@@ -49,20 +49,9 @@ body {
     min-height: 0;
 }
 
-#walletView {
-    display: none;
-    flex: 1;
-    overflow-y: auto;
-    padding: 5vw 4vw;
-    color: #fff;
-}
-
-#app.wallet #mapView {
-    display: none;
-}
-
-#app.wallet #walletView {
-    display: block;
+#walletView h1, #ordersView h1, #clientsView h1 {
+    font-size: 5vw;
+    margin-bottom: 4vw;
 }
 
 #header {
@@ -182,7 +171,7 @@ body {
 }
 
 #mapWrap.ordering #side {
-    bottom: 62vw;
+    bottom: 72vw;
 }
 
 .sideBtn {
@@ -356,6 +345,26 @@ body {
     color: #040507;
     font-size: 4vw;
     font-weight: bold;
+}
+
+/* кнопка "Я приехал" — пассажир подтверждает поездку */
+#confirmBtn {
+    background-color: #11a04e;
+    color: #fff;
+    font-size: 4.4vw;
+    padding: 4vw;
+    box-shadow: 0 0 0 0 rgba(17, 160, 78, 0.5);
+    animation: confirmPulse 1.6s infinite;
+}
+
+#confirmBtn:active {
+    transform: scale(0.98);
+}
+
+@keyframes confirmPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(17, 160, 78, 0.5); }
+    70%  { box-shadow: 0 0 0 3vw rgba(17, 160, 78, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(17, 160, 78, 0); }
 }
 
 #cancelBtn {
@@ -668,3 +677,53 @@ body {
 #icon .item.active {
     color: #ffc702;
 }
+
+/* скрываем вкладку "Заказ" */
+#icon .item[data-tab="order"] {
+    display: none !important;
+}
+
+#walletView, #ordersView, #profileView, #clientsView {
+    display: none; flex: 1; overflow-y: auto; padding: 5vw 4vw; color: #fff;
+}
+#app[data-tab="wallet"] #walletView,
+#app[data-tab="order"] #ordersView,
+#app[data-tab="profile"] #profileView,
+#app[data-tab="clients"] #clientsView { display: block; }
+#app:not([data-tab="map"]) #mapView { display: none; }
+
+#callBtn { display: none; }
+#profileView .card { margin-bottom: 4vw; }
+#profileName { font-size: 5vw; font-weight: bold; }
+.row { display: flex; justify-content: space-between; padding: 4vw 0; border-bottom: 1px solid #1e1f24; font-size: 4vw; }
+.row:last-child { border-bottom: none; }
+.row::after { content: '›'; color: #888; }
+
+.inp { width: 100%; padding: 3.5vw 4vw; margin-bottom: 3vw; border: 1px solid #2a2b31; border-radius: 4vw; background: #1e1f24; color: #fff; font-size: 4.2vw; outline: none; }
+.sheet { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: flex-end; z-index: 4000; }
+.sheet.show { display: flex; }
+.sheetBox { width: 100%; padding: 5vw; padding-bottom: calc(5vw + env(safe-area-inset-bottom)); border-radius: 6vw 6vw 0 0; background: #12131a; color: #fff; }
+.sheetBox h2 { font-size: 4.6vw; margin-bottom: 4vw; }
+
+#clientDetail { display: none; }
+#clientDetail button { margin-top: 3vw; }
+#cdBack { padding-right: 3vw; }
+#cdPrice { font-size: 7vw; font-weight: bold; color: #ffc702; }
+#cdTitle { font-size: 4.4vw; }
+#cdState { margin-top: 3vw; color: #11a04e; font-weight: bold; }
+#clientsBox .hItem { cursor: pointer; }
+
+#driverForm { position: fixed; inset: 0; background: #040507; color: #fff; z-index: 4200; display: none; flex-direction: column; }
+#driverForm.show { display: flex; }
+.dfTop { display: flex; gap: 4vw; align-items: center; padding: 4vw; font-size: 4.6vw; }
+.dfBody { flex: 1; overflow-y: auto; padding: 0 4vw; }
+.step { background: #12131a; border: 1px solid #1e1f24; border-radius: 5vw; padding: 4vw; margin-bottom: 4vw; }
+.step h3 { font-size: 4.2vw; margin-bottom: 3vw; }
+.photo { display: flex; align-items: center; justify-content: center; height: 30vw; margin-bottom: 3vw; border: 1px dashed #444; border-radius: 4vw; background-size: cover; background-position: center; color: #888; font-size: 3.6vw; }
+.photo.done { border: 1px solid #11a04e; color: transparent; }
+#bioCircle { width: 30vw; height: 30vw; margin: 0 auto 3vw; border-radius: 50%; border: 1vw solid #2a2b31; }
+#bioCircle.scan { border-color: #ffc702; animation: pulse 1s infinite; }
+#bioCircle.ok { border-color: #11a04e; }
+@keyframes pulse { 50% { opacity: .3; } }
+#bioText { text-align: center; color: #888; font-size: 3.6vw; }
+#dfSend { width: calc(100% - 8vw); margin: 3vw 4vw; margin-bottom: calc(3vw + env(safe-area-inset-bottom)); }

@@ -27,6 +27,14 @@ const orderBtn = document.getElementById('orderBtn');
 const orderClose = document.getElementById('orderClose');
 const cancelBtn = document.getElementById('cancelBtn');
 const cancelSheet = document.getElementById('cancelSheet');
+const callBtn = document.getElementById('callBtn');
+const confirmBtn = document.createElement('button');
+confirmBtn.id = 'confirmBtn';
+confirmBtn.className = 'yellowBtn';
+confirmBtn.textContent = 'Я приехал';
+confirmBtn.style.display = 'none';
+confirmBtn.style.marginTop = '2vw';
+cancelBtn.parentNode.insertBefore(confirmBtn, cancelBtn);
 
 let me = null;
 let meMarker = null;
@@ -42,6 +50,32 @@ const PRICE_PER_KM = 10000;
 let reqId = 0;
 let balance = Number(localStorage.getItem('balance')) || 0;
 let history = JSON.parse(localStorage.getItem('history') || '[]');
+
+let user = JSON.parse(localStorage.getItem('user') || 'null');
+let activeId = null;
+let watchTimer = null;
+let lastSt = '';
+
+function saveUser() {
+    localStorage.setItem('user', JSON.stringify(user));
+}
+
+/* ---------- ВРЕМЕННЫЙ "СЕРВЕР" (localStorage). Потом заменишь на fetch ---------- */
+function getOrders() {
+    return JSON.parse(localStorage.getItem('orders') || '[]');
+}
+function saveOrders(a) {
+    localStorage.setItem('orders', JSON.stringify(a));
+}
+function updateOrder(id, patch) {
+    const a = getOrders();
+    const o = a.find(x => x.id === id);
+    if (o) {
+        Object.assign(o, patch);
+        saveOrders(a);
+    }
+    return o;
+}
 
 const categories = [
     { re: /столов/, filters: [['amenity', 'canteen'], ['amenity', 'cafe'], ['amenity', 'fast_food']] },
@@ -286,6 +320,8 @@ function resetBtn() {
     orderBtn.textContent = 'Заказать такси';
     orderBtn.dataset.mode = 'order';
     cancelBtn.style.display = 'none';
+    callBtn.style.display = 'none';
+    confirmBtn.style.display = 'none';
     orderClose.style.visibility = 'visible';
     orderStatus.textContent = '';
     orderStatus.className = '';
@@ -326,6 +362,8 @@ async function showOrder(lat, lon, title, addr) {
     const min = Math.max(1, Math.round(r.duration / 60));
     const price = Math.round(km * PRICE_PER_KM / 100) * 100;
     curInfo.price = price;
+    curInfo.km = km.toFixed(1);
+    curInfo.min = min;
     order = curInfo;
 
     orderTime.textContent = 'В пути ' + min + ' мин';
@@ -351,6 +389,11 @@ orderClose.addEventListener('click', () => {
 
 orderBtn.addEventListener('click', () => {
     if (!order || busy || riding) return;
+    if (!user) {               // без входа заказать нельзя
+        openTab('profile');
+        openLogin();
+        return;
+    }
     if (orderBtn.dataset.mode === 'wallet') {
         openTab('wallet');
         return;
@@ -365,18 +408,86 @@ orderBtn.addEventListener('click', () => {
     history.unshift({ type: 'out', title: 'Поездка: ' + order.title, amount: order.price, ts: Date.now() });
     saveWallet();
     renderWallet();
+
+    const o = {
+        id: 'o' + Date.now(),
+        phone: user.phone,
+        title: order.title,
+        sub: orderSub.textContent,
+        price: order.price,
+        km: order.km,
+        min: order.min,
+        status: 'new',
+        ts: Date.now()
+    };
+    saveOrders([o].concat(getOrders()));   // TODO сервер: отправить заказ
+    activeId = o.id;
+    lastSt = '';
+
     busy = true;
     orderClose.style.visibility = 'hidden';
     orderBtn.style.display = 'none';
     orderStatus.className = '';
     orderStatus.textContent = 'Ожидаем, пока таксист примет заказ...';
-    setTimeout(() => {
-        orderStatus.textContent = 'Такси в пути';
-        orderStatus.classList.add('go');
-        cancelBtn.style.display = 'block';
+    clearInterval(watchTimer);
+    watchTimer = setInterval(checkActive, 1000);   // TODO сервер: websocket/polling
+});
+
+// следим за статусом заказа (пока читаем из localStorage)
+function checkActive() {
+    const o = getOrders().find(x => x.id === activeId);
+    if (!o || o.status === lastSt) return;
+    lastSt = o.status;
+
+    if (o.status === 'accepted' || o.status === 'arrived') {
         busy = false;
         riding = true;
-    }, 5000);
+        orderStatus.className = 'go';
+        cancelBtn.style.display = 'block';
+        callBtn.style.display = 'block';
+        confirmBtn.style.display = 'none';
+        callBtn.dataset.phone = o.driverPhone || '';
+        if (o.status === 'accepted') {
+            orderStatus.textContent = 'Такси в пути';
+        } else {
+            orderStatus.textContent = 'Водитель приехал';
+            toast('Водитель приехал!', 5000);
+        }
+    }
+    if (o.status === 'waitConfirm') {
+        // водитель завершил поездку, ждём подтверждения от пассажира
+        busy = false;
+        riding = true;
+        orderStatus.className = 'go';
+        orderStatus.textContent = 'Поездка завершена. Подтвердите, что вы приехали';
+        cancelBtn.style.display = 'none';
+        callBtn.style.display = 'block';
+        callBtn.dataset.phone = o.driverPhone || '';
+        confirmBtn.style.display = 'block';
+        toast('Подтвердите, что вы приехали', 5000);
+    }
+    if (o.status === 'done') {
+        clearInterval(watchTimer);
+        riding = false;
+        busy = false;
+        order = null;
+        mapWrap.classList.remove('ordering');
+        routeLayer.clearLayers();
+        resetBtn();
+        toast('Поездка завершена', 3500);
+    }
+}
+
+callBtn.addEventListener('click', () => {
+    location.href = 'tel:' + (callBtn.dataset.phone || '');
+});
+
+// пассажир подтверждает, что приехал -> только после этого водитель получит деньги
+confirmBtn.addEventListener('click', () => {
+    const o = getOrders().find(x => x.id === activeId);
+    if (!o || o.status !== 'waitConfirm') return;
+    updateOrder(activeId, { status: 'done', confirmedAt: Date.now() });   // TODO сервер: подтвердить поездку
+    checkActive();
 });
 
 // отмена активного заказа
@@ -392,6 +503,10 @@ document.getElementById('cancelNo').addEventListener('click', () => {
 document.getElementById('cancelYes').addEventListener('click', () => {
     cancelSheet.classList.remove('show');
     if (!riding) return;
+    const cur = getOrders().find(x => x.id === activeId);
+    if (cur && cur.status === 'waitConfirm') return;
+    clearInterval(watchTimer);
+    updateOrder(activeId, { status: 'canceled' });
     reqId++;
     order = null;
     riding = false;
@@ -422,7 +537,7 @@ function renderWallet() {
 }
 
 function openTab(t) {
-    app.classList.toggle('wallet', t === 'wallet');
+    app.dataset.tab = t;
     document.querySelectorAll('#icon .item').forEach(i => {
         i.classList.toggle('active', i.dataset.tab === t);
     });
@@ -430,13 +545,13 @@ function openTab(t) {
         setTimeout(() => map.invalidateSize(), 0);
         if (order && !riding && !busy && orderBtn.dataset.mode === 'wallet') resetBtn();
     }
+    if (t === 'wallet') renderWallet();
+    if (t === 'profile') renderProfile();
+    if (t === 'clients') renderClients();
 }
 
 document.querySelectorAll('#icon .item').forEach(i => {
-    i.addEventListener('click', () => {
-        const t = i.dataset.tab;
-        if (t === 'map' || t === 'wallet') openTab(t);
-    });
+    i.addEventListener('click', () => openTab(i.dataset.tab));
 });
 
 const sheet = document.getElementById('sheet');
@@ -801,7 +916,218 @@ window.addEventListener('online', updateStatus);
 window.addEventListener('offline', updateStatus);
 updateStatus();
 
+/* ---------- вход по номеру и коду (фейк) ---------- */
+const loginSheet = document.getElementById('loginSheet');
+const stepPhone = document.getElementById('stepPhone');
+const stepCode = document.getElementById('stepCode');
+const phoneInput = document.getElementById('phoneInput');
+const codeInput = document.getElementById('codeInput');
+
+function openLogin() {
+    stepPhone.style.display = 'block';
+    stepCode.style.display = 'none';
+    phoneInput.value = '';
+    codeInput.value = '';
+    loginSheet.classList.add('show');
+}
+
+document.getElementById('loginBtn').onclick = openLogin;
+document.getElementById('loginCancel').onclick = () => loginSheet.classList.remove('show');
+
+document.getElementById('sendCode').onclick = () => {
+    if (phoneInput.value.replace(/\D/g, '').length < 10) {
+        alert('Введите номер полностью');
+        return;
+    }
+    stepPhone.style.display = 'none';
+    stepCode.style.display = 'block';
+};
+
+document.getElementById('codeOk').onclick = () => {
+    if (codeInput.value.length < 4) {
+        alert('Введите код из 4 цифр');
+        return;
+    }
+    // TODO сервер: проверить код
+    user = { phone: '+' + phoneInput.value.replace(/\D/g, ''), driver: false, pending: false };
+    saveUser();
+    loginSheet.classList.remove('show');
+    renderProfile();
+};
+
+document.getElementById('logoutBtn').onclick = () => {
+    user = null;
+    localStorage.removeItem('user');
+    renderProfile();
+    if (app.dataset.tab === 'clients') openTab('profile');
+};
+
+/* ---------- профиль ---------- */
+function renderProfile() {
+    document.getElementById('profilePhone').textContent = user ? user.phone : 'Вы не вошли';
+    document.getElementById('profileName').textContent = user ? (user.driver ? 'Водитель' : 'Пассажир') : 'Гость';
+    document.getElementById('loginBtn').style.display = user ? 'none' : 'block';
+    document.getElementById('logoutBtn').style.display = user ? 'block' : 'none';
+    document.getElementById('driverRowText').textContent =
+        user && user.driver ? 'Вы водитель ✓' : (user && user.pending ? 'Проверка документов...' : 'Стать водителем');
+    document.getElementById('navClients').style.display = user && user.driver ? 'flex' : 'none';
+}
+
+document.getElementById('rowPromo').onclick = () => {
+    const code = prompt('Введите промокод');
+    if (code) alert('Промокод «' + code + '» не найден');   // TODO сервер
+};
+document.getElementById('rowSupport').onclick = () => alert('Поддержка: +7 700 000 00 00');
+document.getElementById('rowDriver').onclick = () => {
+    if (!user) {
+        openLogin();
+        return;
+    }
+    if (user.driver || user.pending) return;
+    document.getElementById('driverForm').classList.add('show');
+};
+
+/* ---------- регистрация водителя (визуал) ---------- */
+const driverForm = document.getElementById('driverForm');
+const bioCircle = document.getElementById('bioCircle');
+let bioOk = false;
+
+document.getElementById('dfBack').onclick = () => driverForm.classList.remove('show');
+
+driverForm.querySelectorAll('.photo input').forEach(inp => {
+    inp.addEventListener('change', () => {
+        const f = inp.files[0];
+        if (!f) return;
+        inp.parentElement.style.backgroundImage = 'url(' + URL.createObjectURL(f) + ')';
+        inp.parentElement.classList.add('done');
+    });
+});
+
+document.getElementById('bioBtn').onclick = () => {
+    const txt = document.getElementById('bioText');
+    txt.textContent = 'Сканирование лица...';
+    bioCircle.className = 'scan';
+    setTimeout(() => {
+        bioCircle.className = 'ok';
+        txt.textContent = 'Проверка пройдена ✓';
+        bioOk = true;
+    }, 2500);
+};
+
+document.getElementById('dfSend').onclick = () => {
+    const ok = document.getElementById('dfName').value.trim()
+        && document.getElementById('dfPass').value.trim()
+        && document.getElementById('dfIin').value.trim();
+    const photos = driverForm.querySelectorAll('.photo.done').length === 2;
+    if (!ok || !photos || !bioOk) {
+        alert('Заполните паспорт, загрузите обе стороны удостоверения и пройдите биометрию');
+        return;
+    }
+    user.pending = true;
+    saveUser();
+    driverForm.classList.remove('show');
+    renderProfile();
+    // TODO сервер: отправка документов. Сейчас "проверка" проходит через 3 сек
+    setTimeout(() => {
+        user.pending = false;
+        user.driver = true;
+        saveUser();
+        renderProfile();
+        alert('Документы проверены. Теперь вы водитель, появилась вкладка «Клиенты»');
+    }, 3000);
+};
+
+/* ---------- вкладка "Клиенты" (водитель) ---------- */
+const clientsList = document.getElementById('clientsList');
+const clientDetail = document.getElementById('clientDetail');
+let openedId = null;
+
+function renderClients() {
+    clientDetail.style.display = 'none';
+    clientsList.style.display = 'block';
+    const list = getOrders().filter(o => o.status === 'new'
+        || (user && o.driver === user.phone && (o.status === 'accepted' || o.status === 'arrived' || o.status === 'waitConfirm')));
+    const box = document.getElementById('clientsBox');
+    box.innerHTML = list.length
+        ? list.map(o => '<div class="hItem" data-id="' + o.id + '"><div><b>' + esc(o.title) + '</b><small>' + esc(o.km) + ' км · ' + esc(o.phone) + '</small></div><span class="out">' + fmt(o.price) + '</span></div>').join('')
+        : '<div class="empty">Заказов пока нет</div>';
+    box.querySelectorAll('.hItem').forEach(el => el.onclick = () => openClient(el.dataset.id));
+}
+
+function openClient(id) {
+    const o = getOrders().find(x => x.id === id);
+    if (!o || o.status === 'done' || o.status === 'canceled') {
+        renderClients();
+        return;
+    }
+    openedId = id;
+    clientsList.style.display = 'none';
+    clientDetail.style.display = 'block';
+    document.getElementById('cdPrice').textContent = fmt(o.price);
+    document.getElementById('cdDist').textContent = o.km + ' км · ' + o.min + ' мин';
+    document.getElementById('cdTitle').textContent = o.title;
+    document.getElementById('cdSub').textContent = o.sub || '';
+    document.getElementById('cdPhone').textContent = 'Клиент ' + o.phone;
+    const st = o.status;
+    document.getElementById('cdState').textContent = st === 'accepted' ? 'Вы едете к клиенту' : st === 'arrived' ? 'Клиент ждёт' : st === 'waitConfirm' ? 'Ждём подтверждения от клиента' : '';
+    document.getElementById('cdAccept').style.display = st === 'new' ? 'block' : 'none';
+    document.getElementById('cdDecline').style.display = st === 'new' ? 'block' : 'none';
+    document.getElementById('cdArrived').style.display = st === 'accepted' ? 'block' : 'none';
+    document.getElementById('cdFinish').style.display = st === 'arrived' ? 'block' : 'none';
+    document.getElementById('cdContact').style.display = st === 'new' ? 'none' : 'block';
+}
+
+document.getElementById('cdBack').onclick = renderClients;
+document.getElementById('cdDecline').onclick = renderClients;
+
+document.getElementById('cdAccept').onclick = () => {
+    updateOrder(openedId, { status: 'accepted', driver: user.phone, driverPhone: user.phone });  // TODO сервер
+    openClient(openedId);
+};
+
+document.getElementById('cdArrived').onclick = () => {
+    updateOrder(openedId, { status: 'arrived' });   // клиент увидит "Водитель приехал"
+    openClient(openedId);
+};
+
+document.getElementById('cdFinish').onclick = () => {
+    updateOrder(openedId, { status: 'waitConfirm' });   // деньги пока НЕ начисляем
+    openClient(openedId);
+};
+
+document.getElementById('cdContact').onclick = () => {
+    const o = getOrders().find(x => x.id === openedId);
+    if (o) location.href = 'tel:' + o.phone;
+};
+
+// начисляем водителю деньги за поездки, которые пассажир подтвердил
+function payoutDriver() {
+    if (!user) return;
+    getOrders().forEach(o => {
+        if (o.driver === user.phone && o.status === 'done' && !o.paid) {
+            updateOrder(o.id, { paid: true });   // TODO сервер: начислять только на сервере
+            balance += Number(o.price) || 0;
+            history.unshift({ type: 'in', title: 'Поездка: ' + o.title, amount: o.price, ts: Date.now() });
+            saveWallet();
+            renderWallet();
+        }
+    });
+}
+setInterval(payoutDriver, 2000);
+
+// автообновление списка клиентов
+setInterval(() => {
+    if (app.dataset.tab !== 'clients') return;
+    if (clientDetail.style.display === 'none') {
+        renderClients();
+    } else {
+        const o = getOrders().find(x => x.id === openedId);
+        if (!o || o.status === 'done' || o.status === 'canceled') renderClients();
+    }
+}, 3000);
+
 renderWallet();
+renderProfile();
 loadStops();
 
 window.addEventListener('load', () => {
